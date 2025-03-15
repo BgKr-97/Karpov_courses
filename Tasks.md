@@ -203,6 +203,62 @@ ORDER BY 1
 ```
 
 
+**Задача № 5**
 
+```sql
+with min_date_user AS (
+    SELECT user_id,
+        MIN(time) AS date
+    FROM user_actions
+    WHERE order_id NOT IN (
+        SELECT order_id
+        FROM user_actions
+        where action = 'cancel_order')
+    GROUP BY user_id
+    order by 1
+), 
+first_action AS (
+    select
+        user_id, 
+        min(time) as date
+    from user_actions
+    GROUP BY user_id
+    order by 1
+)
+
+select 
+    ua.user_id, 
+    ua.order_id, 
+    ua.action, 
+    ua.time, 
+    mu.user_id,
+    fa.user_id,
+    coalesce(mu.date, fa.date) as first_action_and_order_date, 
+    case
+        when mu.user_id = fa.user_id then 'first_action_and_order_date'
+        when ua.time = fa.date then 'first_action_date'
+        when ua.time = mu.date then 'first_order_date'
+        when mu.date::date = ua.time::date then 'new_orders'
+        else 'other_order'
+    end as type_of_orders
+from user_actions as ua left join min_date_user as mu
+    on ua.user_id = mu.user_id and ua.time::date = mu.date::date
+left join first_action as fa
+    on ua.user_id = fa.user_id and ua.time::date = fa.date::date
+order by 1, 2
+
+select  
+    ua.time::date as date, 
+    count(*) filter (where order_id NOT IN (SELECT order_id FROM user_actions WHERE action = 'cancel_order')) as orders, 
+    count(distinct mu.user_id) as first_orders, 
+    count(fa.user_id) filter (where order_id NOT IN (SELECT order_id FROM user_actions WHERE action = 'cancel_order')) as new_users_orders
+from user_actions as ua left join min_date_user as mu
+    on ua.user_id = mu.user_id and ua.time::date = mu.date::date
+left join first_action as fa
+    on ua.user_id = fa.user_id and ua.time::date = fa.date::date
+where ua.action = 'create_order'
+group by ua.time::date
+order by 1, 2
+```
 
 
