@@ -254,7 +254,6 @@ LEFT JOIN first_valid_order_date AS fv
 LEFT JOIN first_action_date AS fa
     ON ua.user_id = fa.user_id 
     AND ua.time::DATE = fa.first_action_date::DATE
-WHERE ua.action = 'create_order'
 GROUP BY ua.time::DATE
 ORDER BY ua.time::DATE;
 ```
