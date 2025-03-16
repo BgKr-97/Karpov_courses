@@ -206,59 +206,57 @@ ORDER BY 1
 **Задача № 5**
 
 ```sql
-with min_date_user AS (
+WITH first_valid_order_date AS (
+    -- Определяем дату первого валидного заказа пользователя (не отменённого)
     SELECT user_id,
-        MIN(time) AS date
+           MIN(time) AS first_valid_order_date
     FROM user_actions
     WHERE order_id NOT IN (
         SELECT order_id
         FROM user_actions
-        where action = 'cancel_order')
+        WHERE action = 'cancel_order'
+    )
     GROUP BY user_id
-    order by 1
 ), 
-first_action AS (
-    select
-        user_id, 
-        min(time) as date
-    from user_actions
+first_action_date AS (
+    -- Определяем дату самого первого действия пользователя в системе (любого, даже неотменённого)
+    SELECT user_id, 
+           MIN(time) AS first_action_date
+    FROM user_actions
     GROUP BY user_id
-    order by 1
 )
 
-select 
-    ua.user_id, 
-    ua.order_id, 
-    ua.action, 
-    ua.time, 
-    mu.user_id,
-    fa.user_id,
-    coalesce(mu.date, fa.date) as first_action_and_order_date, 
-    case
-        when mu.user_id = fa.user_id then 'first_action_and_order_date'
-        when ua.time = fa.date then 'first_action_date'
-        when ua.time = mu.date then 'first_order_date'
-        when mu.date::date = ua.time::date then 'new_orders'
-        else 'other_order'
-    end as type_of_orders
-from user_actions as ua left join min_date_user as mu
-    on ua.user_id = mu.user_id and ua.time::date = mu.date::date
-left join first_action as fa
-    on ua.user_id = fa.user_id and ua.time::date = fa.date::date
-order by 1, 2
 
-select  
-    ua.time::date as date, 
-    count(*) filter (where order_id NOT IN (SELECT order_id FROM user_actions WHERE action = 'cancel_order')) as orders, 
-    count(distinct mu.user_id) as first_orders, 
-    count(fa.user_id) filter (where order_id NOT IN (SELECT order_id FROM user_actions WHERE action = 'cancel_order')) as new_users_orders
-from user_actions as ua left join min_date_user as mu
-    on ua.user_id = mu.user_id and ua.time::date = mu.date::date
-left join first_action as fa
-    on ua.user_id = fa.user_id and ua.time::date = fa.date::date
-where ua.action = 'create_order'
-group by ua.time::date
-order by 1, 2
+SELECT  
+    ua.time::DATE AS date, 
+    -- Общее число заказов (без отменённых)
+    COUNT(*) FILTER (
+        WHERE order_id NOT IN (
+            SELECT order_id 
+            FROM user_actions 
+            WHERE action = 'cancel_order'
+        )
+    ) AS orders, 
+    -- Число первых заказов (первый валидный заказ каждого пользователя)
+    COUNT(DISTINCT fv.user_id) AS first_orders, 
+    -- Число заказов новых пользователей (все заказы в первый день активности пользователя, кроме первого)
+    COUNT(fa.user_id) FILTER (
+        WHERE order_id NOT IN (
+            SELECT order_id 
+            FROM user_actions 
+            WHERE action = 'cancel_order'
+        )
+    ) AS new_users_orders
+FROM user_actions AS ua
+LEFT JOIN first_valid_order_date AS fv
+    ON ua.user_id = fv.user_id 
+    AND ua.time::DATE = fv.first_valid_order_date::DATE
+LEFT JOIN first_action_date AS fa
+    ON ua.user_id = fa.user_id 
+    AND ua.time::DATE = fa.first_action_date::DATE
+WHERE ua.action = 'create_order'
+GROUP BY ua.time::DATE
+ORDER BY ua.time::DATE;
 ```
 
 
